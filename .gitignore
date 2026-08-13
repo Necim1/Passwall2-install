@@ -1,0 +1,10 @@
+.idea/
+.vscode/
+backups/
+cache/
+*.log
+*.tgz
+*.apk
+*.zip
+xray.raw
+xray.upx
