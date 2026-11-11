@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -58,8 +59,8 @@ class NativeTests(unittest.TestCase):
         self.config.write_text(json.dumps(self.initial))
         for name in ("native-nodes.sh", "native-system.sh", "native-packages.sh"):
             text = (ROOT / "router" / name).read_text()
-            for prefix in ("/usr/", "/etc/", "/tmp/", "/proc/"):
-                text = text.replace(prefix, posix(self.fs) + prefix)
+            # A single pass avoids rewriting /tmp again inside inserted Linux sandbox paths.
+            text = re.sub(r"/(?:usr|etc|tmp|proc)/", lambda match: posix(self.fs) + match[0], text)
             (self.fs / name).write_text(text, newline="\n")
         shutil.copy(ROOT / "router/rebuild-balancer.sh", self.fs / "usr/libexec/pwsetup/rebuild-balancer.sh")
 
