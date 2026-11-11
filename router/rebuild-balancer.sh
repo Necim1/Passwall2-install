@@ -9,6 +9,7 @@ count=0
 is_subscription_group() {
 	wanted="$1"
 	for subscription in $(uci show "$app" | sed -n "s/^$app\.\([^.=]*\)=subscribe_list$/\1/p"); do
+		[ "$(uci -q get "$app.$subscription.enabled" || true)" != 0 ] || continue
 		[ "$(uci -q get "$app.$subscription.remark" || true)" = "$wanted" ] && return 0
 	done
 	return 1
@@ -21,7 +22,27 @@ for node in $(uci show "$app" | sed -n "s/^$app\.\([^.=]*\)=nodes$/\1/p"); do
 		*) continue ;;
 	esac
 	group="$(uci -q get "$app.$node.group" || true)"
-	is_subscription_group "$group" || continue
+	case "$group" in
+		pwsetup-link-*) ;;
+		*) is_subscription_group "$group" || continue ;;
+	esac
+	[ "$(uci -q get "$app.$node.type" || true)" = Xray ] || continue
+	remarks="$(uci -q get "$app.$node.remarks" || true)"
+	# Lua UCI preserves list entries containing spaces and avoids eval/word splitting.
+	command -v lua >/dev/null 2>&1 || { echo 'Lua is required for node exclusions.' >&2; exit 3; }
+	filter_status=0
+	lua - "$remarks" <<'FILTER' || filter_status=$?
+local uci = require("uci").cursor()
+local excluded = uci:get("pwsetup", "main", "excluded_names") or {}
+if type(excluded) == "string" then excluded = {excluded} end
+for _, name in ipairs(excluded) do if name == arg[1] then os.exit(0) end end
+os.exit(10)
+FILTER
+	case "$filter_status" in
+		0) continue ;;
+		10) ;;
+		*) echo 'Cannot evaluate saved node exclusions; balancer unchanged.' >&2; exit 3 ;;
+	esac
 	members="${members}${members:+ }$node"
 	count=$((count + 1))
 done

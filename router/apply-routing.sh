@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-stage=/tmp/pwsetup
+stage="${PWSETUP_STAGE:-/tmp/pwsetup}"
 template="$stage/passwall2-routing.conf"
 rebuild_source="$stage/rebuild-balancer.sh"
 backup_dir=/root/pwsetup-backups
@@ -42,6 +42,10 @@ uci -c "$work/uci" show passwall2 >/dev/null
 /etc/init.d/passwall2 stop 2>/dev/null || true
 cp "$work/passwall2" /etc/config/passwall2
 chmod 0600 /etc/config/passwall2
+if [ -x /usr/libexec/pwsetup/xray-runtime ]; then
+	uci set passwall2.@global_app[0].xray_file='/usr/libexec/pwsetup/xray-runtime'
+	uci commit passwall2
+fi
 cp "$rebuild_source" /usr/libexec/pwsetup/rebuild-balancer.sh
 chmod 0755 /usr/libexec/pwsetup/rebuild-balancer.sh
 rm -rf /tmp/etc/passwall2 /tmp/luci-indexcache /tmp/luci-modulecache 2>/dev/null || true

@@ -8,3 +8,5 @@ cache/
 *.zip
 xray.raw
 xray.upx
+__pycache__/
+*.pyc
