@@ -1,0 +1,51 @@
+name: Отчёт о тестировании беты
+description: Установка и работа 2.0.0-beta.1 на вашем устройстве
+title: "[beta] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за проверку. Не прикладывайте ссылку подписки, UUID, пароли, ключи, полный UCI-конфиг или бэкап настроек.
+  - type: input
+    id: device
+    attributes:
+      label: Модель и аппаратная ревизия
+      placeholder: Cudy WR3000H v1 / Raspberry Pi 4 / x86_64
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Версия OpenWrt и архитектура
+      description: Из /etc/openwrt_release; укажите также APK или IPK.
+    validations:
+      required: true
+  - type: input
+    id: resources
+    attributes:
+      label: RAM, свободный flash, USB/extroot, режим full/compact
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Что проверяли
+      options:
+        - Только установка/обновление
+        - Одиночная ссылка
+        - Подписка
+        - И ссылка, и подписка
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Результат и шаги воспроизведения
+      description: Укажите версию беты, этап ошибки, работу LuCI/SSH и интернета, поведение под загрузкой и после перезагрузки.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Вывод установщика или status без секретов
+      render: text
