@@ -116,12 +116,13 @@ sh /usr/libexec/pwsetup/app/install.sh update
 ## Разработка и проверка
 
 ```sh
-python3 tests/test_native.py
+chmod +x tests/ash-runner.sh
+PW_TEST_SHELL="$PWD/tests/ash-runner.sh" python3 tests/test_native.py
 sh tests/CleanupPlan.sh
 shellcheck -S error -s sh install.sh router/*.sh
 ```
 
-Тесты работают в изолированном каталоге с подменами OpenWrt-команд. Проверяются матрица APK/IPK для 13 архитектур, выбор памяти/flash, контрольные суммы и повреждённый кеш, передача одиночных ссылок и подписок штатному импортёру, исключения и восстановление при ошибке. Они не эмулируют Xray-сервер или настоящее оборудование. CI дополнительно запускает сценарии под BusyBox ash и проверяет PowerShell 5.1.
+Для Linux-проверок нужны Python 3, BusyBox, bsdtar и ShellCheck. Тесты работают в изолированном каталоге с подменами OpenWrt-команд. Проверяются матрица APK/IPK для 13 архитектур, выбор памяти/flash, контрольные суммы и повреждённый кеш, передача одиночных ссылок и подписок штатному импортёру, исключения и восстановление при ошибке. Они не эмулируют Xray-сервер или настоящее оборудование. [Все 23 теста пройдены под BusyBox ash](https://github.com/Necim1/Passwall2-install/actions/runs/43114462655); также пройдена проверка PowerShell 5.1.
 
 Старые `router/install.sh`, `preflight.sh`, `check-existing.sh`, cleanup-скрипты и Windows helpers сохранены для совместимости с версией 1.x. Новый `Setup.ps1` их установочный сценарий не вызывает; новый вход — корневой `install.sh`.
 
