@@ -2,7 +2,7 @@
 
 ## Отдельная бета 2.0
 
-Для желающих потестировать доступна [2.0.0-beta.1 — предварительный релиз](https://github.com/Necim1/Passwall2-install/releases/tag/v2.0.0-beta.1): установка прямо на OpenWrt, автоматический выбор архитектуры и режима Xray, одиночные ссылки и подписки. PowerShell для основной установки больше не требуется.
+Для желающих потестировать доступна [2.0.0-beta.2 — предварительный релиз](https://github.com/Necim1/Passwall2-install/releases/tag/v2.0.0-beta.2): установка прямо на OpenWrt, автоматический выбор архитектуры и режима Xray, одиночные ссылки и подписки, восстановление пакетов после обновления прошивки. PowerShell для основной установки больше не требуется.
 
 [Инструкция запуска и тестирования](https://github.com/Necim1/Passwall2-install/blob/beta/router-native/BETA.md) · [код беты](https://github.com/Necim1/Passwall2-install/tree/beta/router-native) · [отчёт о тестировании](https://github.com/Necim1/Passwall2-install/issues/new?template=beta-test.yml).
 
