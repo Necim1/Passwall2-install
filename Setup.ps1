@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$RouterHost,
-    [ValidateSet('menu', 'check', 'install', 'update', 'input', 'nodes', 'routing', 'backup', 'status')]
+    [ValidateSet('menu', 'check', 'install', 'update', 'restore', 'input', 'nodes', 'routing', 'backup', 'status')]
     [string]$Action = 'menu',
     [ValidateSet('auto', 'full', 'compact')][string]$Storage = 'auto',
     [ValidatePattern('^/[a-zA-Z0-9_./+-]+$')][string]$WorkDirectory = '/tmp',

@@ -1,5 +1,5 @@
 name: Отчёт о тестировании беты
-description: Установка и работа 2.0.0-beta.1 на вашем устройстве
+description: Установка и работа беты 2.x на вашем устройстве
 title: "[beta] "
 body:
   - type: markdown
@@ -35,6 +35,7 @@ body:
         - Одиночная ссылка
         - Подписка
         - И ссылка, и подписка
+        - Восстановление пакетов после обновления OpenWrt
     validations:
       required: true
   - type: textarea

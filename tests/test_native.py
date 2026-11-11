@@ -36,6 +36,7 @@ class NativeTests(unittest.TestCase):
         self.env = os.environ.copy()
         self.env["PYTHONUTF8"] = "1"
         self.env["PW_TEST_PYTHON"] = posix(sys.executable)
+        self.env["MSYS2_ARG_CONV_EXCL"] = "passwall2.;pwsetup.;system."
         self.env["FAKE_ROOT"] = str(self.fs)
         # Keep command lookup inside the doubles before the real utilities.
         self.env["PATH"] = posix(self.fs / "bin") + ":" + "/usr/bin:/bin:" + self.env.get("PATH", "")
@@ -57,7 +58,7 @@ class NativeTests(unittest.TestCase):
                         "pwsetup_main": {".type": "nodes", "protocol": "_shunt"},
                         "pwsetup_balancer": {".type": "nodes", "protocol": "_balancing"}}
         self.config.write_text(json.dumps(self.initial))
-        for name in ("native-nodes.sh", "native-system.sh", "native-packages.sh"):
+        for name in ("native-nodes.sh", "native-system.sh", "native-packages.sh", "native-lifecycle.sh"):
             text = (ROOT / "router" / name).read_text()
             # A single pass avoids rewriting /tmp again inside inserted Linux sandbox paths.
             text = re.sub(r"/(?:usr|etc|tmp|proc)/", lambda match: posix(self.fs) + match[0], text)
@@ -359,6 +360,101 @@ pw_configure_zram
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("128 MiB available RAM+swap", result.stderr)
         self.assertFalse((self.fs / "work/unexpected-install").exists())
+
+    def restore_code(self, health_fail=False):
+        # Dependency/package resolution is doubled; backup, intent, configuration
+        # recovery and the actual restore orchestration run unchanged in a sandbox.
+        return f"""
+. {q(self.fs / 'native-system.sh')}
+. {q(self.fs / 'native-lifecycle.sh')}
+PW_COMMAND=restore; PW_STORAGE_REQUEST=auto; PW_OVERLAY={q(self.fs)}
+PW_HEAP_MIB=96; PW_GOGC=50; PW_ZRAM_MIB=0; PW_INPUT_FILE=''
+pgrep() {{ return 1; }}
+pw_pm_has() {{ return 1; }}
+pw_bootstrap_tools() {{ :; }}
+pw_fetch_release() {{ PW_TAG=fixture-current-firmware; }}
+pw_measure_packages() {{ PW_FULL_KB=1024; PW_OLD_KB=0; PW_MAX_FILE_KB=512; }}
+pw_free_kb() {{ echo 100000; }}
+pw_dependencies() {{ :; }}
+pw_install_packages() {{
+    PW_CHANGED=1
+    printf '%s' '{{"global":{{".type":"global","enabled":"0"}},"apps":{{".type":"global_app"}}}}' > {q(self.config)}
+    cat > {q(self.fs / 'etc/init.d/passwall2')} <<'SERVICE'
+#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_ROOT/service-events"
+SERVICE
+    chmod 0755 {q(self.fs / 'etc/init.d/passwall2')}
+}}
+pw_install_helpers() {{ pw_set_xray_path; }}
+pw_health() {{ touch "$PW_WORK/restore-health"; return {1 if health_fail else 0}; }}
+pw_apply_routing() {{ echo unexpected-routing >&2; exit 91; }}
+pw_import_input() {{ echo unexpected-import >&2; exit 92; }}
+trap pw_recover 0
+pw_install_stack
+PW_CHANGED=0
+"""
+
+    def configure_restoration(self, enabled):
+        data = dict(self.initial)
+        data["global"] = {".type": "global", "enabled": enabled, "node": "my-shunt"}
+        data["provider"] = {".type": "subscribe_list", "url": "https://provider.invalid/private"}
+        data["custom-node"] = {".type": "nodes", "protocol": "vless", "remarks": "Existing node"}
+        data["my-shunt"] = {".type": "nodes", "protocol": "_shunt", "default_node": "custom-node"}
+        self.config.write_text(json.dumps(data))
+        excluded = {"main": {".type": "setup", "excluded_names": ["Limited node"]}}
+        (self.fs / "etc/config/pwsetup").write_text(json.dumps(excluded))
+        (self.fs / "usr/bin/xray").unlink()
+        (self.fs / "etc/init.d/passwall2").unlink()
+        return data, excluded
+
+    def test_restore_after_sysupgrade_keeps_nodes_rules_and_exclusions(self):
+        before, exclusions = self.configure_restoration("1")
+        self.run_sh(self.restore_code())
+        after = json.loads(self.config.read_text())
+        expected = dict(before)
+        expected["apps"] = {".type": "global_app", "xray_file": "/usr/libexec/pwsetup/xray-runtime"}
+        self.assertEqual(after, expected)
+        self.assertEqual(json.loads((self.fs / "etc/config/pwsetup").read_text()), exclusions)
+        self.assertTrue((self.fs / "work/restore-health").exists())
+        self.assertIn("enable", (self.fs / "service-events").read_text())
+
+    def test_restore_keeps_disabled_configuration_off(self):
+        self.configure_restoration("0")
+        self.run_sh(self.restore_code())
+        self.assertFalse((self.fs / "work/restore-health").exists())
+        events = (self.fs / "service-events").read_text().splitlines()
+        self.assertIn("disable", events)
+        self.assertIn("stop", events)
+        self.assertEqual(json.loads(self.config.read_text())["global"]["enabled"], "0")
+
+    def test_restore_keeps_existing_disabled_autostart(self):
+        self.configure_restoration("1")
+        self.script("etc/init.d/passwall2", 'if [ "$1" = enabled ]; then exit 1; fi\n')
+        self.run_sh(self.restore_code())
+        self.assertFalse((self.fs / "work/restore-health").exists())
+        self.assertIn("disable", (self.fs / "service-events").read_text())
+
+    def test_restore_startup_failure_recovers_saved_settings(self):
+        self.configure_restoration("1")
+        before = self.config.read_bytes()
+        result = self.run_sh(self.restore_code(health_fail=True), ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.config.read_bytes(), before)
+
+    def test_restore_without_saved_settings_changes_nothing(self):
+        self.config.unlink()
+        code = f'. {q(self.fs / "native-lifecycle.sh")}; PW_COMMAND=restore; pw_pm_has() {{ return 1; }}; pw_validate_install_mode'
+        result = self.run_sh(code, ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("No saved PassWall2 configuration", result.stderr)
+        self.assertFalse(self.config.exists())
+
+    def test_incomplete_update_points_to_restore(self):
+        (self.fs / "usr/bin/xray").unlink()
+        code = f'. {q(self.fs / "native-lifecycle.sh")}; PW_COMMAND=update; pw_pm_has() {{ return 0; }}; pw_validate_install_mode'
+        result = self.run_sh(code, ok=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("use restore", result.stderr)
 
 
 if __name__ == "__main__":

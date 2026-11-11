@@ -1,4 +1,4 @@
-# Тестирование 2.0.0-beta.1
+# Тестирование 2.0.0-beta.2
 
 Это отдельная предварительная версия установщика. Прежняя версия остаётся в [main](https://github.com/Necim1/Passwall2-install/tree/main). Бета не заменяет её автоматически.
 
@@ -9,6 +9,7 @@
 - По свободному месту выбирается обычный пакет Xray или сжатый бинарник UPX. Настройки RAM и zram выбираются отдельно; существующий zram не перезапускается.
 - Можно вставить одну VLESS/VMess/Trojan/SS-ссылку или HTTPS-подписку, выбрать серверы и исключить лимитные. Исключения сохраняются по точному названию после обновления подписки.
 - Добавлены проверки SHA-256, потоковый выбор нужных пакетов, бэкапы и попытка восстановления настроек/старого Xray после ошибки.
+- В бете 2 добавлен пункт **Restore packages after OpenWrt upgrade**: повторная установка стека после прошивки с сохранёнными настройками, даже если PassWall2/Xray и init-скрипт отсутствуют.
 
 ## На чём пробовать
 
@@ -22,11 +23,11 @@
 
 ```sh
 cd /tmp &&
-wget -O Passwall2-install-2.0.0-beta.1.tar.gz https://github.com/Necim1/Passwall2-install/releases/download/v2.0.0-beta.1/Passwall2-install-2.0.0-beta.1.tar.gz &&
-wget -O Passwall2-install-2.0.0-beta.1.tar.gz.sha256 https://github.com/Necim1/Passwall2-install/releases/download/v2.0.0-beta.1/Passwall2-install-2.0.0-beta.1.tar.gz.sha256 &&
-sha256sum -c Passwall2-install-2.0.0-beta.1.tar.gz.sha256 &&
-tar -xzf Passwall2-install-2.0.0-beta.1.tar.gz &&
-cd Passwall2-install-2.0.0-beta.1 &&
+wget -O Passwall2-install-2.0.0-beta.2.tar.gz https://github.com/Necim1/Passwall2-install/releases/download/v2.0.0-beta.2/Passwall2-install-2.0.0-beta.2.tar.gz &&
+wget -O Passwall2-install-2.0.0-beta.2.tar.gz.sha256 https://github.com/Necim1/Passwall2-install/releases/download/v2.0.0-beta.2/Passwall2-install-2.0.0-beta.2.tar.gz.sha256 &&
+sha256sum -c Passwall2-install-2.0.0-beta.2.tar.gz.sha256 &&
+tar -xzf Passwall2-install-2.0.0-beta.2.tar.gz &&
+cd Passwall2-install-2.0.0-beta.2 &&
 sh install.sh check
 ```
 
@@ -44,6 +45,18 @@ sh install.sh
 sh install.sh install --work-dir /mnt/usb --backup-dir /mnt/usb/pwsetup-backups
 ```
 
+## После обновления OpenWrt
+
+Сохраните настройки при sysupgrade либо восстановите их из своего бэкапа. Скачайте бету 2 и выберите **7) Restore packages after OpenWrt upgrade (keep settings)**:
+
+```sh
+sh install.sh restore
+```
+
+Режим заново скачает совместимые с текущей прошивкой PassWall2, Xray и зависимости. Старый рабочий бинарник и установленные пакеты для этого не требуются. Подписки, узлы, пользовательские правила и исключения сохраняются; шаблон маршрутизации повторно не применяется. Если сохранённый конфиг отсутствует, сначала восстановите бэкап или используйте чистую установку.
+
+Выключенный прокси не включается. Если init-скрипт не пережил прошивку, его автозапуск/запуск определяются по сохранённому флагу включения PassWall2. Прочие программы, включая OpenVPN, этим режимом не переустанавливаются.
+
 Из Windows можно скачать ZIP из Assets релиза, распаковать и запустить:
 
 ```powershell
@@ -60,7 +73,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Setup.ps1 -RouterHost 192.
 
 1. Создайте бэкап и скопируйте его с роутера до испытаний. Установщик также сохраняет бэкап в `/root/pwsetup-backups/` или заданном каталоге.
 2. Проверьте открытие LuCI/SSH и интернет с LAN-клиента до и после установки.
-3. Проверьте отдельно одну ссылку и подписку, выбор/исключение сервера, повторное обновление.
+3. Проверьте отдельно одну ссылку и подписку, выбор/исключение сервера, повторное обновление. Если уже обновляли OpenWrt с сохранением настроек, проверьте новый пункт восстановления пакетов.
 4. Запустите обычную длительную загрузку, проверьте остальные устройства и расход RAM/swap. Затем проверьте запуск после перезагрузки.
 5. Оставьте [отчёт о тестировании](https://github.com/Necim1/Passwall2-install/issues/new?template=beta-test.yml): модель/ревизия, версия OpenWrt, архитектура, RAM, flash/extroot, этап и результат.
 

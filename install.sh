@@ -9,11 +9,13 @@ PW_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 . "$PW_ROOT/router/native-packages.sh"
 . "$PW_ROOT/router/native-system.sh"
 . "$PW_ROOT/router/native-nodes.sh"
+. "$PW_ROOT/router/native-lifecycle.sh"
 
 pw_usage() {
     cat <<'HELP'
 PassWall2 Router Setup — native OpenWrt installer
-Usage: sh install.sh [menu|check|install|update|input|nodes|routing|backup|status|refresh] [options]
+Usage: sh install.sh [menu|check|install|update|restore|input|nodes|routing|backup|status|refresh] [options]
+  restore                reinstall PassWall2/Xray after OpenWrt upgrade; keep saved settings
   --yes                  noninteractive confirmation (input: include all eligible nodes)
   --storage auto|full|compact
   --zram auto|off         preserve existing swap; auto adds zram on low-RAM devices
@@ -53,7 +55,7 @@ while [ "$#" -gt 0 ]; do
         *) pw_die "Unknown option: $1" ;;
     esac
 done
-case "$PW_COMMAND" in menu|check|install|update|input|nodes|routing|backup|status|refresh) ;; *) pw_usage; exit 2 ;; esac
+case "$PW_COMMAND" in menu|check|install|update|restore|input|nodes|routing|backup|status|refresh) ;; *) pw_usage; exit 2 ;; esac
 case "$PW_STORAGE_REQUEST" in auto|full|compact) ;; *) pw_die 'Invalid storage mode.' ;; esac
 case "$PW_ZRAM" in auto|off) ;; *) pw_die 'Invalid zram mode.' ;; esac
 case "$PW_RELEASE" in *[!a-zA-Z0-9._+-]*) pw_die 'Invalid release tag.' ;; esac
@@ -73,10 +75,10 @@ if [ "$PW_COMMAND" = status ]; then
     exit 0
 fi
 if [ "$PW_COMMAND" = menu ]; then
-    printf '\n1) Install\n2) Update (keep settings)\n3) Add server link / subscription\n4) Select nodes\n5) Apply routing profile\n6) Backup\n0) Exit\nChoice: '
+    printf '\n1) Install\n2) Update (keep settings)\n3) Add server link / subscription\n4) Select nodes\n5) Apply routing profile\n6) Backup\n7) Restore packages after OpenWrt upgrade (keep settings)\n0) Exit\nChoice: '
     IFS= read -r choice
     case "$choice" in 1) PW_COMMAND=install ;; 2) PW_COMMAND=update ;; 3) PW_COMMAND=input ;;
-        4) PW_COMMAND=nodes ;; 5) PW_COMMAND=routing ;; 6) PW_COMMAND=backup ;; 0) exit 0 ;; *) pw_die 'Invalid choice.' ;; esac
+        4) PW_COMMAND=nodes ;; 5) PW_COMMAND=routing ;; 6) PW_COMMAND=backup ;; 7) PW_COMMAND=restore ;; 0) exit 0 ;; *) pw_die 'Invalid choice.' ;; esac
 fi
 
 mkdir -p /var/lock "$PW_WORK_PARENT"
@@ -124,61 +126,8 @@ pw_prepare_input() {
     secret=''
 }
 
-pw_install_or_update() {
-    pw_conflicts
-    if [ "$PW_COMMAND" = install ]; then
-        if pw_pm_has luci-app-passwall2 || [ -s /etc/config/passwall2 ]; then
-            pw_die 'Existing PassWall2 data found. Use update; installation will not overwrite it.'
-        fi
-    else
-        pw_pm_has luci-app-passwall2 && [ -x /usr/bin/xray ] && [ -s /etc/config/passwall2 ] || pw_die 'Update requires an existing complete installation.'
-    fi
-    pw_confirm 'Install/update PassWall2 and dependencies? Settings backup will be created.' || exit 0
-    pw_backup
-    pw_bootstrap_tools
-    pw_fetch_release
-    pw_measure_packages
-    free_kb=$(pw_free_kb "$PW_OVERLAY")
-    full_budget=$(pw_write_budget "$PW_FULL_KB" "$PW_OLD_KB" "$PW_MAX_FILE_KB")
-    compact_budget=$full_budget
-    if [ "$PW_STORAGE_REQUEST" = compact ] || { [ "$PW_STORAGE_REQUEST" = auto ] && [ "$free_kb" -lt "$((full_budget + 8192))" ]; }; then
-        pw_prepare_compact
-        compact_budget=$(pw_write_budget "$PW_COMPACT_KB" "$PW_OLD_KB" "$PW_COMPACT_MAX")
-    fi
-    PW_STORAGE=$(pw_choose_storage "$PW_STORAGE_REQUEST" "$free_kb" "$full_budget" "$compact_budget" 8192) || \
-        pw_die 'Insufficient flash even for the selected runtime. Use extroot/USB; no PassWall2 service was stopped.'
-    pw_log "Storage: $PW_STORAGE; Go memory target: $PW_HEAP_MIB MiB (0 = default); existing swap is preserved."
-    pw_dependencies
-    # Dependencies and backup can consume flash: do not rely on an earlier measurement.
-    free_kb=$(pw_free_kb "$PW_OVERLAY")
-    needed=$full_budget; [ "$PW_STORAGE" != compact ] || needed=$compact_budget
-    [ "$free_kb" -ge "$((needed + 8192))" ] || pw_die 'Not enough remaining flash after dependencies; use extroot.'
-    pw_install_packages
-    pw_install_helpers
-    if [ "$PW_COMMAND" = install ]; then
-        pw_apply_routing
-        pw_set_xray_path
-        pw_log 'Installed. Routing remains disabled until a valid input is imported.'
-        if [ -n "$PW_INPUT_FILE" ] || { [ "$PW_YES" != 1 ] && pw_confirm 'Add a server link or subscription now?'; }; then
-            pw_prepare_input
-            pw_import_input
-        fi
-    else
-        # Restore the exact config after package postinst hooks, then change only our runtime path.
-        cp -p "$PW_BACKUP/previous/etc/config/passwall2" /etc/config/passwall2
-        pw_set_xray_path
-        if [ "$PW_WAS_ENABLED" = 1 ]; then /etc/init.d/passwall2 enable
-        else /etc/init.d/passwall2 disable; fi
-        if [ "$PW_WAS_RUNNING" = 1 ]; then
-            pw_health || pw_die 'Updated runtime did not pass its configuration/startup check.'
-        else
-            /etc/init.d/passwall2 stop
-        fi
-    fi
-}
-
 case "$PW_COMMAND" in
-    install|update) pw_install_or_update ;;
+    install|update|restore) pw_install_stack ;;
     backup) pw_backup ;;
     input) pw_prepare_input; pw_backup; pw_import_input ;;
     routing)
